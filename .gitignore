@@ -1,0 +1,37 @@
+# Input media and extracted frames
+bench_3d/video/
+bench_3d/images/
+*.MOV
+*.mov
+*.mp4
+*.mkv
+
+# COLMAP databases, workspaces, and generated models
+bench_3d/workspace/
+bench_3d/result/
+*.db
+*.bin
+*.ply
+*.vis
+
+# Local CUDA compatibility and locally installed applications
+.local/
+
+# Runtime logs and temporary files
+*.log
+*.tmp
+*.bak
+core
+core.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
