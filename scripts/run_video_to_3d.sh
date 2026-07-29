@@ -168,10 +168,29 @@ if [[ $SPARSE_ONLY -eq 0 ]]; then
     info "Skipping dense reconstruction (already complete)"
   else
     info "Running COLMAP dense reconstruction"
+    BEST_SPARSE_MODEL=""
+    BEST_REGISTERED_IMAGES=-1
+    for MODEL_DIR in "$SPARSE_DIR"/*; do
+      [[ -d "$MODEL_DIR" ]] || continue
+      REGISTERED_IMAGES="$(
+        colmap model_analyzer --path "$MODEL_DIR" 2>&1 |
+          awk '/Registered images:/ {print $NF; exit}'
+      )"
+      [[ "$REGISTERED_IMAGES" =~ ^[0-9]+$ ]] || continue
+      if (( REGISTERED_IMAGES > BEST_REGISTERED_IMAGES )); then
+        BEST_REGISTERED_IMAGES="$REGISTERED_IMAGES"
+        BEST_SPARSE_MODEL="$MODEL_DIR"
+      fi
+    done
+    if [[ -z "$BEST_SPARSE_MODEL" ]]; then
+      error "No valid sparse reconstruction was found in $SPARSE_DIR"
+      exit 1
+    fi
+    info "Using largest sparse model: $BEST_SPARSE_MODEL ($BEST_REGISTERED_IMAGES registered images)"
     mkdir -p "$DENSE_DIR"
     colmap image_undistorter \
       --image_path "$IMAGES_DIR" \
-      --input_path "$SPARSE_DIR/0" \
+      --input_path "$BEST_SPARSE_MODEL" \
       --output_path "$DENSE_DIR" \
       --output_type COLMAP \
       --max_image_size "$MAX_SIZE"
