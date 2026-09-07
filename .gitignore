@@ -35,3 +35,7 @@ venv/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Crack3D local environment and model weights
+.venv-crack/
+crack_pipeline/weights/

@@ -107,6 +107,53 @@ output/
     └── mesh.ply                    # 최종 triangle mesh
 ```
 
+## GUI 실행 (Crack3D)
+
+이미 환경이 준비된 현재 작업 폴더에서는 다음 명령으로 실행합니다.
+
+```bash
+cd /home/yoonie/Desktop/colmap
+bash run_crack3d.sh
+```
+
+GitHub에서 받은 경우 저장소 폴더에서 실행하세요.
+
+```bash
+cd colmap-video-to-3d
+bash run_crack3d.sh
+```
+
+GUI에서 영상, 프로젝트 이름, 저장 위치를 선택하고 실행하면 3D 재구성 → 카메라 모델 내보내기 → 균열 AI 검출 → 3D 균열 투영 순서로 처리합니다.
+
+### 처음 설치하는 경우
+
+위의 COLMAP/CUDA/FFmpeg 환경 외에 GUI용 Python 패키지와 AI 실행 환경이 필요합니다. Ubuntu 24.04의 시스템 Python 기준:
+
+```bash
+sudo apt install python3-pyqt5 python3-vtk9 python3-numpy python3-opencv python3-venv
+python3 -m venv .venv-crack
+.venv-crack/bin/python -m pip install -r crack_pipeline/requirements.txt
+```
+
+균열 검출 가중치 `dice.pt`는 별도로 준비하여 `crack_pipeline/weights/dice.pt`에 넣으세요. 가중치와 가상환경은 저장소에 포함하지 않습니다. 사용 모델은 [yakhyo/crack-segmentation](https://github.com/yakhyo/crack-segmentation)의 U-Net이며, 코드가 확인하는 가중치 SHA-256은 `3216b12e9f73b9df08db4788358704a6353c3d0dbc120709054c02529133e14a`입니다. CUDA 사용 시 GPU와 호환되는 PyTorch 환경이 필요합니다.
+
+### 중단된 작업 이어하기
+
+GUI를 다시 열고 이전과 같은 영상·프로젝트 이름·저장 위치·설정으로 실행한 뒤 **이어하기**를 선택하세요.
+
+- 완료된 3D 재구성을 재사용하고 카메라 모델을 다시 내보냅니다.
+- 균열 검출 요약과 전체 마스크가 있고 검출 설정이 같으면 AI 검출을 건너뜁니다.
+- 마지막 3D 투영은 다시 실행합니다. `PINHOLE`과 `SIMPLE_RADIAL` 카메라 모델을 지원합니다.
+- 3D 재구성 자체가 중단되어 필수 결과가 없으면 **교체하고 처음부터**를 선택해야 합니다. 이 선택은 기존 프로젝트 결과를 삭제하고 재실행합니다.
+
+기능 추가 이전의 프로젝트는 영상·재구성 설정을 자동 대조할 실행 기록이 없으므로 동일한 입력인지 직접 확인해 주세요.
+
+완료된 결과만 열려면:
+
+```bash
+bash run_crack3d.sh --open-project /absolute/path/to/output/result/my_scan
+```
+
 ## 주요 옵션
 
 | 옵션 | 설명 | 권장값 |
