@@ -199,6 +199,7 @@ def write_video(overlays: list[Path], output: Path, fps: float) -> None:
         command = [
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
             "-framerate", str(fps), "-pattern_type", "glob", "-i", str(overlays[0].parent / "*.png"),
+            "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
             "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart", str(output),
         ]
@@ -206,7 +207,8 @@ def write_video(overlays: list[Path], output: Path, fps: float) -> None:
         return
     first = cv2.imread(str(overlays[0]))
     height, width = first.shape[:2]
-    writer = cv2.VideoWriter(str(output), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+    video_width, video_height = width + width % 2, height + height % 2
+    writer = cv2.VideoWriter(str(output), cv2.VideoWriter_fourcc(*"mp4v"), fps, (video_width, video_height))
     if not writer.isOpened():
         raise RuntimeError(f"Could not create video: {output}")
     try:
@@ -214,6 +216,7 @@ def write_video(overlays: list[Path], output: Path, fps: float) -> None:
             frame = cv2.imread(str(path))
             if frame is None or frame.shape[:2] != (height, width):
                 raise RuntimeError(f"Invalid or inconsistent overlay frame: {path}")
+            frame = cv2.copyMakeBorder(frame, 0, video_height - height, 0, video_width - width, cv2.BORDER_CONSTANT)
             writer.write(frame)
     finally:
         writer.release()
@@ -285,6 +288,7 @@ def main() -> int:
     write_video(overlays, video_path, args.fps)
     total_seconds = time.perf_counter() - pipeline_start
     summary = {
+        "input_dir": str(input_dir.resolve()),
         "model": {"source": MODEL_SOURCE, "weights": str(args.weights.resolve()), "sha256": weights_hash},
         "runtime": {
             "device": str(device),

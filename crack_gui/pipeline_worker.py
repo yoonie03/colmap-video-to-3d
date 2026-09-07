@@ -105,7 +105,9 @@ class PipelineWorker(QObject):
 
         result_dir = self.output_root / "result" / self.project
         workspace_dir = self.output_root / "workspace" / self.project
-        frames_dir = self.output_root / "images" / self.project
+        # Dense camera intrinsics describe these undistorted images, not the
+        # original extracted frames (which can have different sizes/distortion).
+        frames_dir = workspace_dir / "dense" / "images"
         crack_dir = result_dir / "crack_detection"
         model_txt = result_dir / "02_sparse" / "model_txt"
         total_stages = 4
@@ -157,6 +159,8 @@ class PipelineWorker(QObject):
         ], "카메라 모델 내보내기")
 
         self.stage_changed.emit(3, total_stages, "균열 AI 검출")
+        if not frames_dir.is_dir() or not any(frames_dir.iterdir()):
+            raise RuntimeError(f"균열 검출에 필요한 왜곡 보정 이미지가 없습니다: {frames_dir}")
         detection_command = [
             str(ai_python), str(self.repo_root / "crack_pipeline" / "run.py"),
             "--frames-dir", str(frames_dir), "--output-dir", str(crack_dir),
@@ -169,6 +173,7 @@ class PipelineWorker(QObject):
         if self.resume and detection_complete(frames_dir, crack_dir, self.settings):
             self.log_line.emit("[이어하기] 완료된 균열 AI 검출 결과 사용")
         else:
+            self.log_line.emit("왜곡 보정 이미지로 균열을 검출합니다. 이전 원본 이미지의 마스크는 재사용하지 않습니다.")
             # An interrupted rerun must not leave an old completion marker behind.
             (crack_dir / "summary.json").unlink(missing_ok=True)
             self._run_command(detection_command, "균열 AI 검출")
@@ -210,6 +215,8 @@ class PipelineWorker(QObject):
 def detection_complete(frames_dir: Path, crack_dir: Path, settings: dict) -> bool:
     try:
         summary = json.loads((crack_dir / "summary.json").read_text(encoding="utf-8"))
+        if summary.get("input_dir") != str(frames_dir.resolve()):
+            return False
         if any(summary["settings"].get(key) != settings[key] for key in ("threshold", "min_area", "fps")):
             return False
         frames = {path.name for path in frames_dir.iterdir() if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}}
