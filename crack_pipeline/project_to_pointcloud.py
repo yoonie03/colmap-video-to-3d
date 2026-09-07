@@ -81,15 +81,22 @@ def quaternion_to_rotation(qw: float, qx: float, qy: float, qz: float) -> np.nda
 
 
 def read_images(path: Path) -> dict[str, ImagePose]:
-    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
+    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
     images: dict[str, ImagePose] = {}
-    for index in range(0, len(lines), 2):
-        fields = lines[index].split()
+    index = 0
+    while index < len(lines):
+        if not lines[index]:
+            index += 1
+            continue
+        fields = lines[index].split(maxsplit=9)
         if len(fields) < 10:
             raise RuntimeError(f"Malformed image record in {path}: {lines[index]}")
         quaternion = tuple(map(float, fields[1:5]))
         translation = np.array(tuple(map(float, fields[5:8])), dtype=np.float64)
         images[fields[9]] = ImagePose(int(fields[8]), quaternion_to_rotation(*quaternion), translation)
+        if index + 1 >= len(lines):
+            raise RuntimeError(f"Missing POINTS2D record in {path}: {fields[9]}")
+        index += 2
     if not images:
         raise RuntimeError(f"No image poses found in {path}")
     return images
@@ -187,6 +194,8 @@ def main() -> int:
     header, vertices = read_ply(args.point_cloud)
     print(f"Points: {len(vertices)}")
     print(f"Fusion images: {len(fusion_names)}")
+    if not fusion_names or not len(vertices):
+        raise RuntimeError("Fusion image list or point cloud is empty")
     visibility = read_visibility(args.visibility, len(vertices), len(fusion_names))
 
     positive_views = np.zeros(len(vertices), dtype=np.uint16)
@@ -200,8 +209,10 @@ def main() -> int:
 
     for image_index, name in enumerate(fusion_names):
         mask_path = args.masks_dir / f"{Path(name).stem}.png"
-        if not mask_path.is_file() or name not in poses:
-            continue
+        if name not in poses:
+            raise RuntimeError(f"Missing camera pose for fusion image: {name}")
+        if not mask_path.is_file():
+            raise RuntimeError(f"Missing mask for fusion image: {mask_path}")
         mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
         if mask is None:
             raise RuntimeError(f"Could not read mask: {mask_path}")
@@ -238,7 +249,11 @@ def main() -> int:
         handle.write(header)
         vertices.tofile(handle)
 
+    labels_path = args.output.with_suffix(".crack_labels.npy")
+    np.save(labels_path, crack_points, allow_pickle=False)
+
     summary = {
+        "crack_labels": str(labels_path.resolve()),
         "input_point_cloud": str(args.point_cloud.resolve()),
         "output_point_cloud": str(args.output.resolve()),
         "point_count": len(vertices),

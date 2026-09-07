@@ -12,6 +12,16 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 
 
+def read_crack_labels(path: Path, point_count: int) -> np.ndarray | None:
+    labels_path = path.with_suffix(".crack_labels.npy")
+    if not labels_path.is_file():
+        return None
+    labels = np.load(labels_path, allow_pickle=False)
+    if labels.dtype != np.bool_ or labels.shape != (point_count,):
+        raise RuntimeError(f"균열 표시 데이터가 PLY와 맞지 않습니다: {labels_path}")
+    return labels
+
+
 class PointCloudViewer(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -69,13 +79,11 @@ class PointCloudViewer(QWidget):
         self._main_actor.GetProperty().SetPointSize(self.point_size.value())
         self._renderer.AddActor(self._main_actor)
 
-        colors_vtk = polydata.GetPointData().GetScalars()
+        self._crack_actor = None
+        labels = read_crack_labels(path, polydata.GetNumberOfPoints())
         crack_count = 0
-        if colors_vtk is not None:
-            colors = vtk_to_numpy(colors_vtk)
-            crack_indices = np.flatnonzero(
-                (colors[:, 0] >= 250) & (colors[:, 1] <= 5) & (colors[:, 2] <= 5)
-            )
+        if labels is not None:
+            crack_indices = np.flatnonzero(labels)
             crack_count = len(crack_indices)
             if crack_count:
                 all_points = vtk_to_numpy(polydata.GetPoints().GetData())
@@ -97,7 +105,8 @@ class PointCloudViewer(QWidget):
                 self._crack_actor.GetProperty().SetPointSize(max(6, self.point_size.value() + 4))
                 self._renderer.AddActor(self._crack_actor)
 
-        self.status.setText(f"{path.name} · {polydata.GetNumberOfPoints():,}점 · 빨간 후보 {crack_count:,}점")
+        candidate_status = f"균열 후보 {crack_count:,}점" if labels is not None else "균열 표시 데이터 없음 · 이어하기로 다시 생성"
+        self.status.setText(f"{path.name} · {polydata.GetNumberOfPoints():,}점 · {candidate_status}")
         self.status.show()
         self._vtk_widget.show()
         self.reset_camera()

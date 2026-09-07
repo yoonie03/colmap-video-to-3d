@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+
+import cv2
 import os
 import shutil
 import signal
@@ -222,8 +224,12 @@ def detection_complete(frames_dir: Path, crack_dir: Path, settings: dict) -> boo
         frames = {path.name for path in frames_dir.iterdir() if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}}
         if not frames or frames != {record["frame"] for record in summary["frames"]}:
             return False
-        return all((crack_dir / "masks" / f"{Path(name).stem}.png").is_file()
-                   and (crack_dir / "masks" / f"{Path(name).stem}.png").stat().st_size > 0 for name in frames)
+        for name in frames:
+            mask = cv2.imread(str(crack_dir / "masks" / f"{Path(name).stem}.png"), cv2.IMREAD_GRAYSCALE)
+            frame = cv2.imread(str(frames_dir / name), cv2.IMREAD_GRAYSCALE)
+            if mask is None or frame is None or mask.shape != frame.shape:
+                return False
+        return True
     except (OSError, ValueError, KeyError, TypeError):
         return False
 
